@@ -1,0 +1,21 @@
+{
+  "name": "appointment-checker",
+  "version": "1.0.0",
+  "description": "A helper to check doctor appointment availability.",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "js-yaml": "^4.1.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.2"
+  }
+}

@@ -1,0 +1,22 @@
+[Unit]
+Description=Appointment Checker Service
+After=network.target
+
+[Service]
+# 重要：请将这里的 User 修改为您在服务器上运行此程序的用户名
+User=your_username
+
+# --- 核心配置：启动命令 ---
+# 指定二进制文件的绝对路径，并通过 -c 参数指定配置文件的绝对路径
+ExecStart=/usr/local/bin/appointment-checker -c /etc/appointment-checker/config.yaml
+
+# 程序将在退出后自动重启
+Restart=on-failure
+RestartSec=5s
+
+# 将日志输出到 systemd 的 journald
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
