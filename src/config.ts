@@ -7,6 +7,7 @@ interface AppConfig {
     cookie: string;
     pushPlus: {
         token: string;
+        topic?: string; // 群组编码，用于群组发送
     };
     scanIntervalSeconds?: number;
     reminderMinutesBeforeRelease?: number[];

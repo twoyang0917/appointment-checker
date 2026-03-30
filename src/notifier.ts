@@ -18,7 +18,8 @@ export async function sendNotification(title: string, content: string) {
         token: config.pushPlus.token,
         title: title,
         content: content,
-        template: 'markdown'
+        template: 'markdown',
+        topic: config.pushPlus.topic // 群组编码，用于群组发送
     });
 
     try {

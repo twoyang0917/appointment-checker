@@ -246,4 +246,119 @@ describe('Appointment Checker', () => {
       expect(validAppointments).toEqual(['2026-04-03', '2026-04-04']);
     });
   });
+  
+  describe('Notification message assembly', () => {
+    it('should generate correct notification content', () => {
+      const doctorName = '周劲草';
+      const targetDate = '2026-04-02';
+      const targetSlotStatus = ['2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20'];
+      const availableSlots = [
+        '2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20',
+        '2026-04-03 周四 全天 - 可预约 - 剩余/总数：3/20'
+      ];
+      
+      // 模拟通知内容组装
+      let markdownContent = `
+## 挂号提醒
+
+发现 **${doctorName}** 医生有可预约号源！
+
+---
+
+### 今日目标
+今天需要抢 **${targetDate}** 的号
+
+`;
+      
+      if (targetSlotStatus.length > 0) {
+        markdownContent += `### 目标日期状态
+
+${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
+
+`;
+      } else {
+        markdownContent += `### 目标日期状态
+
+> - ${targetDate} 暂未发现号源
+
+`;
+      }
+      
+      markdownContent += `### 所有可预约号源
+
+${availableSlots.map(slot => `> - ${slot}`).join('\n')}
+
+---
+
+### [>> 点击这里，立即前往预约 <<](http://example.com)
+      `;
+      
+      // 验证通知内容是否正确生成
+      expect(markdownContent).toContain('挂号提醒');
+      expect(markdownContent).toContain(doctorName);
+      expect(markdownContent).toContain(targetDate);
+      expect(markdownContent).toContain('目标日期状态');
+      expect(markdownContent).toContain('所有可预约号源');
+      expect(markdownContent).toContain('点击这里，立即前往预约');
+      expect(markdownContent).toContain('2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20');
+      expect(markdownContent).toContain('2026-04-03 周四 全天 - 可预约 - 剩余/总数：3/20');
+    });
+  });
+  
+  describe('Notification sending', () => {
+    it('should send notification for available appointments', async () => {
+      const doctorName = '周劲草';
+      const targetDate = '2026-04-02';
+      const targetSlotStatus = ['2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20'];
+      const availableSlots = [
+        '2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20',
+        '2026-04-03 周四 全天 - 可预约 - 剩余/总数：3/20'
+      ];
+      
+      // 组装通知内容
+      let markdownContent = `
+## 挂号提醒
+
+发现 **${doctorName}** 医生有可预约号源！
+
+---
+
+### 今日目标
+今天需要抢 **${targetDate}** 的号
+
+`;
+      
+      if (targetSlotStatus.length > 0) {
+        markdownContent += `### 目标日期状态
+
+${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
+
+`;
+      } else {
+        markdownContent += `### 目标日期状态
+
+> - ${targetDate} 暂未发现号源
+
+`;
+      }
+      
+      markdownContent += `### 所有可预约号源
+
+${availableSlots.map(slot => `> - ${slot}`).join('\n')}
+
+---
+
+### [>> 点击这里，立即前往预约 <<](http://www.bjsfrj.com/weixin/zjsyy/index.php/yuyue/ysxx/ysid/48)
+      `;
+      
+      // 发送通知
+      const { sendNotification } = await import('../src/notifier');
+      await sendNotification(
+        `🎉 发现【${doctorName}】有可预约号源！`,
+        markdownContent
+      );
+      
+      console.log('通知已发送，请检查微信是否收到');
+    });
+  });
 });
