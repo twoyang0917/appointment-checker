@@ -4,7 +4,8 @@
   "description": "A helper to check doctor appointment availability.",
   "main": "src/index.ts",
   "scripts": {
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "test": "bun test"
   },
   "keywords": [],
   "author": "",

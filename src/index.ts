@@ -29,7 +29,7 @@ async function handleError(title: string, message: string) {
  * 计算今天应该抢哪天的号（就诊日的前三天）
  * @returns 目标日期字符串 (YYYY-MM-DD)
  */
-function getTargetDate(): string {
+export function getTargetDate(): string {
     const today = new Date();
     // 就诊日的前三天，所以要加3天
     const targetDate = new Date(today);

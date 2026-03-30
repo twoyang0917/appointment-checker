@@ -15,6 +15,11 @@ scanIntervalSeconds: 1800
 # 例如: [60, 5, 1] 表示在放号前60分钟、5分钟、1分钟分别发送提醒
 reminderMinutesBeforeRelease: [60, 5, 1]
 
+# 是否跳过头痛专病门诊（可选，默认为 true）
+# true: 跳过头痛专病门诊的号源提醒
+# false: 包含头痛专病门诊的号源提醒
+skipHeadacheClinic: true
+
 # 日志配置（可选，默认为关闭）
 # 注意：如果使用 systemd 部署（推荐），建议将 enabled 设置为 false
 # systemd 会自动将日志输出到 /var/log/appointment-checker/ 目录

@@ -1,0 +1,249 @@
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import * as cheerio from 'cheerio';
+import { getTargetDate } from '../src/index';
+
+// 模拟配置
+const mockConfig = {
+  skipHeadacheClinic: true,
+  doctorPageUrl: 'http://example.com',
+  userAgent: 'Test User Agent',
+  cookie: 'test-cookie'
+};
+
+// 模拟 HTML 结构
+const mockHtml = `
+<div id="time">
+  <div class="weui-cell">
+    <div class="weui-cell__bd">
+      <p>日期：2026-04-02</p>
+      <p>星期：三</p>
+      <p>时段：全天</p>
+      <p>医事服务费：40.00元</p>
+      <p>剩余/总数：0/20</p>
+    </div>
+    <div class="weui-cell__ft">
+      <a href="#" class="weui-btn bg-gray">已约满</a>
+    </div>
+  </div>
+  <div class="weui-cell">
+    <div class="weui-cell__bd">
+      <p>日期：2026-04-03</p>
+      <p>星期：四</p>
+      <p>时段：全天</p>
+      <p>医事服务费：40.00元</p>
+      <p>剩余/总数：5/20</p>
+    </div>
+    <div class="weui-cell__ft">
+      <a href="#" class="weui-btn">可预约</a>
+    </div>
+  </div>
+  <div class="weui-cell">
+    <h4>头痛专病门诊</h4>
+  </div>
+  <div class="weui-cell">
+    <div class="weui-cell__bd">
+      <p>日期：2026-04-04</p>
+      <p>星期：五</p>
+      <p>时段：全天</p>
+      <p>医事服务费：40.00元</p>
+      <p>剩余/总数：10/20</p>
+    </div>
+    <div class="weui-cell__ft">
+      <a href="#" class="weui-btn">可预约</a>
+    </div>
+  </div>
+  <div class="weui-cell">
+    <div class="weui-cell__bd">
+      <p>日期：2026-04-05</p>
+      <p>星期：六</p>
+      <p>时段：全天</p>
+      <p>医事服务费：40.00元</p>
+      <p>剩余/总数：20/20</p>
+    </div>
+    <div class="weui-cell__ft">
+      <a href="#" class="weui-btn">未开始</a>
+    </div>
+  </div>
+  <div class="weui-cell">
+    <div class="weui-cell__bd">
+      <p>日期：2026-04-06</p>
+      <p>星期：日</p>
+      <p>时段：全天</p>
+      <p>医事服务费：40.00元</p>
+      <p>剩余/总数：0/20</p>
+    </div>
+    <div class="weui-cell__ft">
+      <a href="#" class="weui-btn bg-gray">停止预约</a>
+    </div>
+  </div>
+</div>
+`;
+
+// 存储原始的 Date 对象
+let originalDate: typeof Date;
+
+describe('Appointment Checker', () => {
+  beforeEach(() => {
+    // 保存原始的 Date 对象
+    originalDate = global.Date;
+  });
+  
+  afterEach(() => {
+    // 恢复原始的 Date 对象
+    global.Date = originalDate;
+  });
+  
+  describe('getTargetDate', () => {
+    it('should return the date 3 days from now', () => {
+      // 模拟当前日期
+      const mockDate = new Date('2026-03-30');
+      
+      // 模拟 Date 构造函数
+      global.Date = function(...args: any[]) {
+        if (args.length === 0) {
+          return mockDate;
+        }
+        return new originalDate(...args);
+      } as any;
+      
+      global.Date.now = () => mockDate.getTime();
+      Object.setPrototypeOf(global.Date, originalDate.prototype);
+      
+      const targetDate = getTargetDate();
+      expect(targetDate).toBe('2026-04-02');
+    });
+  });
+  
+  describe('HTML parsing', () => {
+    it('should correctly parse appointment statuses', () => {
+      const $ = cheerio.load(mockHtml);
+      const cells = $('#time .weui-cell');
+      
+      expect(cells.length).toBe(6);
+      
+      // 测试第一个 cell (已约满)
+      const firstCell = $(cells[0]);
+      const firstButton = firstCell.find('.weui-btn');
+      expect(firstButton.text().trim()).toBe('已约满');
+      expect(firstButton.hasClass('bg-gray')).toBe(true);
+      
+      // 测试第二个 cell (可预约)
+      const secondCell = $(cells[1]);
+      const secondButton = secondCell.find('.weui-btn');
+      expect(secondButton.text().trim()).toBe('可预约');
+      expect(secondButton.hasClass('bg-gray')).toBe(false);
+      
+      // 测试第三个 cell (头痛专病门诊标题)
+      const thirdCell = $(cells[2]);
+      expect(thirdCell.find('h4').text()).toBe('头痛专病门诊');
+      
+      // 测试第四个 cell (头痛专病门诊可预约)
+      const fourthCell = $(cells[3]);
+      const fourthButton = fourthCell.find('.weui-btn');
+      expect(fourthButton.text().trim()).toBe('可预约');
+      
+      // 测试第五个 cell (未开始)
+      const fifthCell = $(cells[4]);
+      const fifthButton = fifthCell.find('.weui-btn');
+      expect(fifthButton.text().trim()).toBe('未开始');
+      
+      // 测试第六个 cell (停止预约)
+      const sixthCell = $(cells[5]);
+      const sixthButton = sixthCell.find('.weui-btn');
+      expect(sixthButton.text().trim()).toBe('停止预约');
+      expect(sixthButton.hasClass('bg-gray')).toBe(true);
+    });
+  });
+  
+  describe('Status filtering', () => {
+    it('should filter out stopped, fully booked and not started appointments', () => {
+      const $ = cheerio.load(mockHtml);
+      const cells = $('#time .weui-cell');
+      
+      const validStatuses = [];
+      
+      cells.each((index, element) => {
+        const cell = $(element);
+        const button = cell.find('.weui-btn');
+        
+        if (button.length > 0) {
+          const status = button.text().trim();
+          if (status !== '停止预约' && status !== '已约满' && status !== '未开始') {
+            validStatuses.push(status);
+          }
+        }
+      });
+      
+      expect(validStatuses).toEqual(['可预约', '可预约']);
+    });
+  });
+  
+  describe('Headache clinic filtering', () => {
+    it('should skip headache clinic appointments when skipHeadacheClinic is true', () => {
+      const $ = cheerio.load(mockHtml);
+      const cells = $('#time .weui-cell');
+      
+      let isHeadacheClinic = false;
+      const validAppointments = [];
+      
+      cells.each((index, element) => {
+        const cell = $(element);
+        
+        // 检查是否是头痛专病门诊标题
+        if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
+          isHeadacheClinic = true;
+          return; // 跳过标题行
+        }
+        
+        // 如果是头痛专病门诊且配置为跳过，则跳过
+        if (isHeadacheClinic && mockConfig.skipHeadacheClinic) {
+          return;
+        }
+        
+        const button = cell.find('.weui-btn');
+        
+        if (button.length > 0) {
+          const status = button.text().trim();
+          if (status !== '停止预约' && status !== '已约满' && status !== '未开始') {
+            const date = cell.find('p:contains("日期")').text().trim().replace('日期：', '');
+            validAppointments.push(date);
+          }
+        }
+      });
+      
+      expect(validAppointments).toEqual(['2026-04-03']);
+    });
+    
+    it('should include headache clinic appointments when skipHeadacheClinic is false', () => {
+      const $ = cheerio.load(mockHtml);
+      const cells = $('#time .weui-cell');
+      
+      let isHeadacheClinic = false;
+      const validAppointments = [];
+      
+      cells.each((index, element) => {
+        const cell = $(element);
+        
+        // 检查是否是头痛专病门诊标题
+        if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
+          isHeadacheClinic = true;
+          return; // 跳过标题行
+        }
+        
+        // 不管是否是头痛专病门诊，都处理
+        const button = cell.find('.weui-btn');
+        
+        if (button.length > 0) {
+          const status = button.text().trim();
+          if (status !== '停止预约' && status !== '已约满' && status !== '未开始') {
+            const date = cell.find('p:contains("日期")').text().trim().replace('日期：', '');
+            validAppointments.push(date);
+          }
+        }
+      });
+      
+      // 应该包含头痛专病门诊的号源
+      expect(validAppointments).toEqual(['2026-04-03', '2026-04-04']);
+    });
+  });
+});
