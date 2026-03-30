@@ -108,21 +108,17 @@ async function checkAppointmentStatus() {
                 // 记录所有号源状态
                 logger.info(`号源状态: ${date} ${day} ${period} - ${status} - ${remaining}`);
                 
-                // 跳过停止预约和已约满的状态
-                if (status === '停止预约' || status === '已约满') {
-                    logger.info(`跳过状态: ${status} 的号源`);
-                    return;
-                }
-                
                 // 检查是否是目标日期的号
                 if (date === targetDate) {
                     targetSlotStatus.push(`${date} ${day} ${period} - ${status} - ${remaining}`);
                 }
                 
-                // 检查是否有可用号源（未开始或可预约）
-                if (status !== '停止预约' && status !== '已约满') {
+                // 只将真正可预约的号源视为可用（跳过停止预约、已约满和未开始状态）
+                if (status !== '停止预约' && status !== '已约满' && status !== '未开始') {
                     const slotDetails = `${date} ${day} ${period} - ${status} - ${remaining}`;
                     availableSlots.push(slotDetails);
+                } else {
+                    logger.info(`跳过状态: ${status} 的号源`);
                 }
             }
         });
