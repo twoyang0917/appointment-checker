@@ -10,6 +10,7 @@ interface AppConfig {
     };
     scanIntervalSeconds?: number;
     reminderMinutesBeforeRelease?: number[];
+    skipHeadacheClinic?: boolean;
     logging?: {
         enabled?: boolean;
         logDir?: string;
@@ -75,6 +76,7 @@ export const config = {
     serverChan: loadedConfig.serverChan,
     scanIntervalSeconds: loadedConfig.scanIntervalSeconds || 1800,
     reminderMinutesBeforeRelease: loadedConfig.reminderMinutesBeforeRelease || [60, 5, 1],
+    skipHeadacheClinic: loadedConfig.skipHeadacheClinic ?? true,
 
     // --- 静态配置 ---
     doctorPageUrl: 'http://www.bjsfrj.com/weixin/zjsyy/index.php/yuyue/ysxx/ysid/48',

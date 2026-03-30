@@ -3,8 +3,6 @@ import { config, logger } from './config';
 import { sendNotification } from './notifier';
 
 // --- 状态管理 ---
-// 用于记录已发送过通知的号源，防止重复发送。key: string (例如: "2026-04-01-全天")
-const notifiedSlots = new Set<string>();
 // 用于故障通知的冷却，防止在持续故障时轰炸用户。单位: 毫秒
 let lastErrorNotificationTimestamp = 0;
 const ERROR_NOTIFICATION_COOLDOWN = 60 * 60 * 1000; // 1小时
@@ -25,6 +23,23 @@ async function handleError(title: string, message: string) {
     } else {
         logger.info("故障通知仍在冷却中，本次不发送。");
     }
+}
+
+/**
+ * 计算今天应该抢哪天的号（就诊日的前三天）
+ * @returns 目标日期字符串 (YYYY-MM-DD)
+ */
+function getTargetDate(): string {
+    const today = new Date();
+    // 就诊日的前三天，所以要加3天
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + 3);
+    
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
 }
 
 /**
@@ -55,54 +70,106 @@ async function checkAppointmentStatus() {
         const $ = cheerio.load(html);
 
         const doctorName = $('p:contains("姓名：")').text().replace('姓名：', '').trim();
+        const targetDate = getTargetDate();
+        
+        logger.info(`今天需要抢 ${targetDate} 的号`);
 
-        const newlyAvailableSlots: string[] = [];
+        const availableSlots: string[] = [];
+        const targetSlotStatus: string[] = [];
+
+        // 检查是否在头痛专病门诊部分
+        let isHeadacheClinic = false;
 
         $('#time .weui-cell').each((index, element) => {
             const cell = $(element);
-            const button = cell.find('.weui-btn');
+            
+            // 检查是否是头痛专病门诊标题
+            if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
+                isHeadacheClinic = true;
+                logger.info('发现头痛专病门诊部分');
+                return; // 跳过标题行
+            }
+            
+            // 如果是头痛专病门诊且配置为跳过，则跳过
+            if (isHeadacheClinic && config.skipHeadacheClinic) {
+                logger.info('跳过头痛专病门诊');
+                return;
+            }
 
-            if (button.length > 0 && !button.hasClass('bg-gray')) {
+            const button = cell.find('.weui-btn');
+            
+            if (button.length > 0) {
+                const status = button.text().trim();
                 const date = cell.find('p:contains("日期")').text().trim().replace('日期：', '');
                 const period = cell.find('p:contains("时段")').text().trim().replace('时段：', '');
-                const slotId = `${date}-${period}`;
-
-                // 如果这个号源是第一次发现，则加入待通知列表
-                if (!notifiedSlots.has(slotId)) {
-                    const day = cell.find('p:contains("星期")').text().trim();
-                    const remaining = cell.find('p:contains("剩余/总数")').text().trim();
-                    const slotDetails = `${date} ${day} ${period} - ${remaining}`;
-                    
-                    newlyAvailableSlots.push(slotDetails);
-                    notifiedSlots.add(slotId); // 加入已通知列表，防止下次重复通知
+                const day = cell.find('p:contains("星期")').text().trim();
+                const remaining = cell.find('p:contains("剩余/总数")').text().trim();
+                
+                // 记录所有号源状态
+                logger.info(`号源状态: ${date} ${day} ${period} - ${status} - ${remaining}`);
+                
+                // 跳过停止预约和已约满的状态
+                if (status === '停止预约' || status === '已约满') {
+                    logger.info(`跳过状态: ${status} 的号源`);
+                    return;
+                }
+                
+                // 检查是否是目标日期的号
+                if (date === targetDate) {
+                    targetSlotStatus.push(`${date} ${day} ${period} - ${status} - ${remaining}`);
+                }
+                
+                // 检查是否有可用号源（未开始或可预约）
+                if (status !== '停止预约' && status !== '已约满') {
+                    const slotDetails = `${date} ${day} ${period} - ${status} - ${remaining}`;
+                    availableSlots.push(slotDetails);
                 }
             }
         });
 
-        if (newlyAvailableSlots.length > 0) {
-            const title = `🎉 发现【${doctorName}】有新号源！`;
-            const markdownContent = `
+        // 发送提醒
+        if (availableSlots.length > 0) {
+            const title = `🎉 发现【${doctorName}】有可预约号源！`;
+            
+            let markdownContent = `
 ## 挂号提醒
 
-发现 **${doctorName}** 医生有新的可预约号源！
+发现 **${doctorName}** 医生有可预约号源！
 
 ---
 
-### 新发现的时间段
+### 今日目标
+今天需要抢 **${targetDate}** 的号
 
-${newlyAvailableSlots.map(slot => `> - ${slot}`).join('\n')}
+`;
+            
+            if (targetSlotStatus.length > 0) {
+                markdownContent += `### 目标日期状态
+
+${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
+
+`;
+            } else {
+                markdownContent += `### 目标日期状态
+
+> - ${targetDate} 暂未发现号源
+
+`;
+            }
+            
+            markdownContent += `### 所有可预约号源
+
+${availableSlots.map(slot => `> - ${slot}`).join('\n')}
 
 ---
 
 ### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})
-
-(程序已记录以上号源，不会重复提醒)
             `;
 
-            logger.info('🎉 发现新的可预约号源！准备发送 Markdown 通知...');
+            logger.info('🎉 发现可预约号源！准备发送 Markdown 通知...');
             await sendNotification(title, markdownContent);
         } else {
-            logger.info('暂无 *新* 的可用号源。');
+            logger.info('暂无可用号源。');
         }
 
     } catch (error) {
