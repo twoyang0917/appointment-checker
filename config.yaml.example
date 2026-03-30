@@ -4,9 +4,9 @@
 # 示例: 'PHPSESSID=xxxxxxxxxxxxxxxxxxxxxxxxx'
 cookie: ''
 
-# Server酱 通知相关配置 (必须)
-serverChan:
-  sendKey: ''
+# PushPlus 通知相关配置 (必须)
+pushPlus:
+  token: ''
 
 # 常规扫描间隔（秒，可选，默认为 1800）
 scanIntervalSeconds: 1800

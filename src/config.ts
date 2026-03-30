@@ -5,8 +5,8 @@ import { Logger, LoggerConfig } from './logger';
 
 interface AppConfig {
     cookie: string;
-    serverChan: {
-        sendKey: string;
+    pushPlus: {
+        token: string;
     };
     scanIntervalSeconds?: number;
     reminderMinutesBeforeRelease?: number[];
@@ -31,8 +31,8 @@ function loadConfig(configPath: string): AppConfig {
         const fileContents = fs.readFileSync(resolvedPath, 'utf8');
         const data = yaml.load(fileContents) as AppConfig;
 
-        if (!data.cookie || !data.serverChan?.sendKey) {
-            throw new Error('关键配置缺失！请检查配置文件中是否已正确填写 cookie 和 serverChan.sendKey。');
+        if (!data.cookie || !data.pushPlus?.token) {
+            throw new Error('关键配置缺失！请检查配置文件中是否已正确填写 cookie 和 pushPlus.token。');
         }
 
         return data;
@@ -73,7 +73,7 @@ const logger = new Logger(loggingConfig);
 export const config = {
     // --- 从外部配置文件读取的配置 ---
     cookie: loadedConfig.cookie,
-    serverChan: loadedConfig.serverChan,
+    pushPlus: loadedConfig.pushPlus,
     scanIntervalSeconds: loadedConfig.scanIntervalSeconds || 1800,
     reminderMinutesBeforeRelease: loadedConfig.reminderMinutesBeforeRelease || [60, 5, 1],
     skipHeadacheClinic: loadedConfig.skipHeadacheClinic ?? true,

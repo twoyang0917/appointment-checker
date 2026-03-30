@@ -1,40 +1,43 @@
 import { config, logger } from './config';
 
 /**
- * 通过 Server酱 发送通知
+ * 通过 PushPlus 发送通知
  * @param title 消息标题
  * @param content 消息内容 (支持 Markdown)
  */
 export async function sendNotification(title: string, content: string) {
-    if (!config.serverChan.sendKey) {
-        logger.warn('未配置 Server酱 SendKey，跳过发送。');
+    if (!config.pushPlus.token) {
+        logger.warn('未配置 PushPlus Token，跳过发送。');
         return;
     }
 
-    const url = `https://sctapi.ftqq.com/${config.serverChan.sendKey}.send`;
+    const url = 'https://www.pushplus.plus/send';
 
-    // Server酱 使用 application/x-www-form-urlencoded 格式
-    const body = new URLSearchParams();
-    body.append('title', title);
-    body.append('desp', content);
+    // PushPlus 使用 application/json 格式
+    const body = JSON.stringify({
+        token: config.pushPlus.token,
+        title: title,
+        content: content,
+        template: 'markdown'
+    });
 
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
             body: body,
         });
 
         const result = await response.json();
 
-        if (result.code === 0) {
-            logger.info('成功通过 Server酱 发送通知。');
+        if (result.code === 200) {
+            logger.info('成功通过 PushPlus 发送通知。');
         } else {
-            logger.error(`发送 Server酱 通知失败: ${JSON.stringify(result)}`);
+            logger.error(`发送 PushPlus 通知失败: ${JSON.stringify(result)}`);
         }
     } catch (error) {
-        logger.error(`发送 Server酱 通知时发生严重错误: ${error}`);
+        logger.error(`发送 PushPlus 通知时发生严重错误: ${error}`);
     }
 }
