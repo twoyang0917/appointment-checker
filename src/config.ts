@@ -9,8 +9,18 @@ interface AppConfig {
         token: string;
         topic?: string; // 群组编码，用于群组发送
     };
-    scanIntervalSeconds?: number;
-    reminderMinutesBeforeRelease?: number[];
+    scanIntervals: {
+        regular: number;    // 常规扫描间隔（秒）
+        combat: number;     // 战斗模式扫描间隔（秒）
+    };
+    combatMode: {
+        duration: number;           // 战斗模式持续时间（秒）
+    };
+    notificationCooldown: {
+        combat: number;     // 战斗模式通知冷却时间（秒）
+        regular: number;    // 常规模式通知冷却时间（秒）
+    };
+    reminderMinutesBeforeRelease: number[];
     skipHeadacheClinic?: boolean;
     logging?: {
         enabled?: boolean;
@@ -75,9 +85,19 @@ export const config = {
     // --- 从外部配置文件读取的配置 ---
     cookie: loadedConfig.cookie,
     pushPlus: loadedConfig.pushPlus,
-    scanIntervalSeconds: loadedConfig.scanIntervalSeconds || 1800,
+    scanIntervals: {
+        regular: loadedConfig.scanIntervals?.regular || 300,     // 常规扫描间隔（秒），默认5分钟
+        combat: loadedConfig.scanIntervals?.combat || 30,        // 战斗模式扫描间隔（秒），默认30秒
+    },
+    combatMode: {
+        duration: loadedConfig.combatMode?.duration || 600,          // 战斗模式持续时间（秒），默认10分钟
+    },
+    notificationCooldown: {
+        combat: loadedConfig.notificationCooldown?.combat || 180,     // 战斗模式通知冷却时间（秒），默认3分钟
+        regular: loadedConfig.notificationCooldown?.regular || 1800,   // 常规模式通知冷却时间（秒），默认30分钟
+    },
     reminderMinutesBeforeRelease: loadedConfig.reminderMinutesBeforeRelease || [60, 5, 1],
-    skipHeadacheClinic: loadedConfig.skipHeadacheClinic ?? true,
+    skipHeadacheClinic: loadedConfig.skipHeadacheClinic ?? false,
 
     // --- 静态配置 ---
     doctorPageUrl: 'http://www.bjsfrj.com/weixin/zjsyy/index.php/yuyue/ysxx/ysid/48',

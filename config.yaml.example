@@ -9,17 +9,28 @@ pushPlus:
   token: ''
   topic: '' # 群组编码，用于群组发送（可选）
 
-# 常规扫描间隔（秒，可选，默认为 1800）
-scanIntervalSeconds: 1800
+# 扫描间隔配置
+scanIntervals:
+  regular: 300     # 常规扫描间隔（秒），默认5分钟
+  combat: 30       # 战斗模式扫描间隔（秒），默认30秒
+
+# 战斗模式配置
+combatMode:
+  duration: 600           # 战斗模式持续时间（秒），默认10分钟
+
+# 通知冷却时间配置
+notificationCooldown:
+  combat: 180     # 战斗模式通知冷却时间（秒），默认3分钟
+  regular: 1800    # 常规模式通知冷却时间（秒），默认30分钟
 
 # 放号前提醒时间（分钟，可选，默认为 [60, 5, 1]）
 # 例如: [60, 5, 1] 表示在放号前60分钟、5分钟、1分钟分别发送提醒
 reminderMinutesBeforeRelease: [60, 5, 1]
 
-# 是否跳过头痛专病门诊（可选，默认为 true）
+# 是否跳过头痛专病门诊（可选，默认为 false）
 # true: 跳过头痛专病门诊的号源提醒
 # false: 包含头痛专病门诊的号源提醒
-skipHeadacheClinic: true
+skipHeadacheClinic: false
 
 # 日志配置（可选，默认为关闭）
 # 注意：如果使用 systemd 部署（推荐），建议将 enabled 设置为 false

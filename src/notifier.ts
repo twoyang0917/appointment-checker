@@ -11,13 +11,17 @@ export async function sendNotification(title: string, content: string) {
         return;
     }
 
+    // 在内容末尾添加当前时间，以规避 PushPlus 的重复内容检测
+    const currentTime = new Date().toLocaleString('zh-CN');
+    const contentWithTime = `${content}\n\n---\n\n**通知时间：** ${currentTime}`;
+
     const url = 'https://www.pushplus.plus/send';
 
     // PushPlus 使用 application/json 格式
     const body = JSON.stringify({
         token: config.pushPlus.token,
         title: title,
-        content: content,
+        content: contentWithTime,
         template: 'markdown',
         topic: config.pushPlus.topic // 群组编码，用于群组发送
     });

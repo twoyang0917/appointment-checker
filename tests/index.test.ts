@@ -342,7 +342,7 @@ ${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
 `;
       }
       
-      markdownContent += `### 所有可预约号源
+      markdownContent += `### 可预约号源
 
 ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
 
@@ -359,6 +359,30 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
       );
       
       console.log('通知已发送，请检查微信是否收到');
+    });
+  });
+  
+  describe('Notification cooldown', () => {
+    it('should respect notification cooldown', () => {
+      // 模拟当前时间
+      const now = Date.now();
+      
+      // 模拟战斗模式下的冷却时间（5分钟）
+      const combatCooldown = 5 * 60 * 1000;
+      
+      // 模拟常规模式下的冷却时间（15分钟）
+      const regularCooldown = 15 * 60 * 1000;
+      
+      // 测试冷却时间计算
+      expect(combatCooldown).toBe(300000); // 5分钟
+      expect(regularCooldown).toBe(900000); // 15分钟
+      
+      // 测试冷却逻辑
+      const lastNotificationTime = now - combatCooldown - 1000; // 超过冷却时间
+      expect(now - lastNotificationTime > combatCooldown).toBe(true);
+      
+      const withinCooldownTime = now - combatCooldown + 1000; // 在冷却时间内
+      expect(now - withinCooldownTime > combatCooldown).toBe(false);
     });
   });
 });

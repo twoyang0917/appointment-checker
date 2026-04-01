@@ -7,6 +7,9 @@ import { sendNotification } from './notifier';
 let lastErrorNotificationTimestamp = 0;
 const ERROR_NOTIFICATION_COOLDOWN = 60 * 60 * 1000; // 1小时
 
+// 用于通知冷却，防止过于频繁的通知。单位: 毫秒
+let lastNotificationTimestamp = 0;
+
 /**
  * 处理并发送错误通知（带冷却功能）
  * @param title 故障标题
@@ -123,14 +126,20 @@ async function checkAppointmentStatus() {
             }
         });
 
-        // 发送提醒
+        // 通知冷却逻辑
+        const now = Date.now();
+        const isCombatMode = scanInterval === config.scanIntervals.combat * 1000;
+        const notificationCooldown = isCombatMode ? config.notificationCooldown.combat * 1000 : config.notificationCooldown.regular * 1000;
+
+        // 发送提醒：只在有可预约号源且不在冷却期内时发送
         if (availableSlots.length > 0) {
-            const title = `🎉 发现【${doctorName}】有可预约号源！`;
-            
-            let markdownContent = `
+            if (now - lastNotificationTimestamp > notificationCooldown) {
+                const title = `🎉 发现【${doctorName}】有可预约号源！`;
+                
+                let markdownContent = `
 ## 挂号提醒
 
-发现 **${doctorName}** 医生有可预约号源！
+发现可预约号源！
 
 ---
 
@@ -138,32 +147,36 @@ async function checkAppointmentStatus() {
 今天需要抢 **${targetDate}** 的号
 
 `;
-            
-            if (targetSlotStatus.length > 0) {
-                markdownContent += `### 目标日期状态
+                
+                if (targetSlotStatus.length > 0) {
+                    markdownContent += `### 目标日期状态
 
 ${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
 
 `;
-            } else {
-                markdownContent += `### 目标日期状态
+                } else {
+                    markdownContent += `### 目标日期状态
 
 > - ${targetDate} 暂未发现号源
 
 `;
-            }
-            
-            markdownContent += `### 所有可预约号源
+                }
+                
+                markdownContent += `### 可预约号源
 
 ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
 
 ---
 
 ### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})
-            `;
+                `;
 
-            logger.info('🎉 发现可预约号源！准备发送 Markdown 通知...');
-            await sendNotification(title, markdownContent);
+                logger.info('🎉 发现可预约号源！准备发送 Markdown 通知...');
+                await sendNotification(title, markdownContent);
+                lastNotificationTimestamp = now;
+            } else {
+                logger.info('发现可预约号源，但在冷却期内，跳过发送。');
+            }
         } else {
             logger.info('暂无可用号源。');
         }
@@ -178,9 +191,9 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
 logger.info('程序启动，立即执行第一次检查...');
 checkAppointmentStatus();
 
-setInterval(checkAppointmentStatus, config.scanIntervalSeconds * 1000);
+setInterval(checkAppointmentStatus, config.scanIntervals.regular * 1000);
 
-let scanInterval = config.scanIntervalSeconds * 1000; // 默认扫描间隔
+let scanInterval = config.scanIntervals.regular * 1000; // 默认扫描间隔（使用新配置）
 let mainIntervalId: NodeJS.Timeout | null = null;
 const reminderTimerIds: NodeJS.Timeout[] = []; // 存储所有预告提醒的定时器ID
 
@@ -263,36 +276,41 @@ async function scheduleRemindersAndFrequency() {
                 targetTime.setTime(tomorrowUtc.getTime());
             }
 
-            const combatModeStartTime = targetTime.getTime() - 10 * 60 * 1000;
-            const combatModeEndTime = targetTime.getTime() + 1 * 60 * 1000;
+            // 战斗模式开始时间（与第一个提醒时间相同）
+            const firstReminderTime = config.reminderMinutesBeforeRelease.length > 0 
+                ? targetTime.getTime() - Math.max(...config.reminderMinutesBeforeRelease) * 60 * 1000 
+                : targetTime.getTime() - 60 * 60 * 1000; // 默认60分钟
+            
+            // 战斗模式结束时间（放号后 duration 秒）
+            const combatModeEndTime = targetTime.getTime() + config.combatMode.duration * 1000;
 
             config.reminderMinutesBeforeRelease.forEach(minutes => {
                 const reminderTime = targetTime.getTime() - minutes * 60 * 1000;
                 if (reminderTime > now.getTime()) {
                     const timeout = reminderTime - now.getTime();
                     const timerId = setTimeout(() => {
-                        sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！`);
+                        sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`);
                     }, timeout);
                     reminderTimerIds.push(timerId);
                     logger.info(`已设置：在 ${new Date(reminderTime).toLocaleString()} 发送放号前${minutes}分钟提醒`);
                 }
             });
 
-            if (combatModeStartTime > now.getTime()) {
-                const startTimeout = combatModeStartTime - now.getTime();
+            if (firstReminderTime > now.getTime()) {
+                const startTimeout = firstReminderTime - now.getTime();
                 const timerId = setTimeout(() => {
                     logger.info(`⚡️ 进入战斗模式：临近 ${timeStr} 放号时间，扫描频率已提高！`);
-                    adjustScanInterval(5);
+                    adjustScanInterval(config.scanIntervals.combat);
                 }, startTimeout);
                 reminderTimerIds.push(timerId);
-                logger.info(`已设置：在 ${new Date(combatModeStartTime).toLocaleString()} 进入战斗模式`);
+                logger.info(`已设置：在 ${new Date(firstReminderTime).toLocaleString()} 进入战斗模式`);
             }
 
             if (combatModeEndTime > now.getTime()) {
                 const endTimeout = combatModeEndTime - now.getTime();
                 const timerId = setTimeout(() => {
                     logger.info(`✅ 战斗模式结束：已过 ${timeStr} 放号时间，扫描频率已恢复常规。`);
-                    adjustScanInterval(config.scanIntervalSeconds);
+                    adjustScanInterval(config.scanIntervals.regular);
                 }, endTimeout);
                 reminderTimerIds.push(timerId);
                 logger.info(`已设置：在 ${new Date(combatModeEndTime).toLocaleString()} 恢复常规模式`);
@@ -314,7 +332,7 @@ function start() {
 
     // 启动常规轮询
     mainIntervalId = setInterval(checkAppointmentStatus, scanInterval);
-    logger.info(`已启动常规扫描，频率: ${config.scanIntervalSeconds} 秒/次`);
+    logger.info(`已启动常规扫描，频率: ${config.scanIntervals.regular} 秒/次`);
 
     // 每天重新调度一次，以防日期变化导致定时器失效
     setInterval(scheduleRemindersAndFrequency, 24 * 60 * 60 * 1000);
