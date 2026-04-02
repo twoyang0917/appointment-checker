@@ -11,9 +11,10 @@ export async function sendNotification(title: string, content: string) {
         return;
     }
 
-    // 在内容末尾添加当前时间，以规避 PushPlus 的重复内容检测
-    const currentTime = new Date().toLocaleString('zh-CN');
-    const contentWithTime = `${content}\n\n---\n\n**通知时间：** ${currentTime}`;
+    // 在内容末尾添加当前时间（北京时间），以规避 PushPlus 的重复内容检测
+    const beijingTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+    const currentTime = beijingTime.toLocaleString('zh-CN');
+    const contentWithTime = `${content}\n\n通知时间：${currentTime}`;
 
     const url = 'https://www.pushplus.plus/send';
 

@@ -261,7 +261,7 @@ describe('Appointment Checker', () => {
       let markdownContent = `
 ## 挂号提醒
 
-发现 **${doctorName}** 医生有可预约号源！
+【测试】发现可预约号源！
 
 ---
 
@@ -295,7 +295,6 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
       
       // 验证通知内容是否正确生成
       expect(markdownContent).toContain('挂号提醒');
-      expect(markdownContent).toContain(doctorName);
       expect(markdownContent).toContain(targetDate);
       expect(markdownContent).toContain('目标日期状态');
       expect(markdownContent).toContain('所有可预约号源');
@@ -319,7 +318,7 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
       let markdownContent = `
 ## 挂号提醒
 
-发现 **${doctorName}** 医生有可预约号源！
+【测试】发现可预约号源！
 
 ---
 
@@ -354,7 +353,7 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
       // 发送通知
       const { sendNotification } = await import('../src/notifier');
       await sendNotification(
-        `🎉 发现【${doctorName}】有可预约号源！`,
+        `🎉 【测试】发现可预约号源！`,
         markdownContent
       );
       

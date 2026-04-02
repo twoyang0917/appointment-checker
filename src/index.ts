@@ -141,7 +141,7 @@ async function checkAppointmentStatus() {
         // 发送提醒：只在有可预约号源且不在冷却期内时发送
         if (availableSlots.length > 0) {
             if (now - lastNotificationTimestamp > notificationCooldown) {
-                const title = `🎉 发现【${doctorName}】有可预约号源！`;
+                const title = `🎉 发现可预约号源！`;
                 
                 let markdownContent = `
 ## 挂号提醒
@@ -196,6 +196,126 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
             await handleError("程序运行异常", message);
         }
     }
+}
+
+/**
+ * 获取目标日期的号源状态
+ * @param html 医生页面的 HTML 内容
+ * @param targetDate 目标日期
+ * @returns 号源状态数组
+ */
+function getTargetDateSlotStatus(html: string, targetDate: string): string[] {
+    const $ = cheerio.load(html);
+    const targetSlotStatus: string[] = [];
+    let isHeadacheClinic = false;
+    
+    $('#time .weui-cell').each((index, element) => {
+        const cell = $(element);
+        
+        // 检查是否是头痛专病门诊标题
+        if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
+            isHeadacheClinic = true;
+            return; // 跳过标题行
+        }
+        
+        // 如果是头痛专病门诊且配置为跳过，则跳过
+        if (isHeadacheClinic && config.skipHeadacheClinic) {
+            return;
+        }
+        
+        const button = cell.find('.weui-btn');
+        
+        if (button.length > 0) {
+            const status = button.text().trim();
+            const date = cell.find('p:contains("日期")').text().trim().replace('日期：', '');
+            const period = cell.find('p:contains("时段")').text().trim().replace('时段：', '');
+            const day = cell.find('p:contains("星期")').text().trim();
+            const remaining = cell.find('p:contains("剩余/总数")').text().trim();
+            
+            // 只记录目标日期的状态
+            if (date === targetDate) {
+                targetSlotStatus.push(`${date} ${day} ${period} - ${status} - ${remaining}`);
+            }
+        }
+    });
+    
+    return targetSlotStatus;
+}
+
+/**
+ * 构造挂号通知的 Markdown 内容
+ * @param doctorName 医生姓名
+ * @param targetDate 目标日期
+ * @param targetSlotStatus 目标日期号源状态
+ * @param availableSlots 所有可预约号源
+ * @returns Markdown 格式的通知内容
+ */
+function buildNotificationMarkdown(
+    doctorName: string | null,
+    targetDate: string,
+    targetSlotStatus: string[],
+    availableSlots: string[]
+): string {
+    let markdownContent = `### 今日目标
+今天需要抢 **${targetDate}** 的号
+
+`;
+    
+    if (targetSlotStatus.length > 0) {
+        markdownContent += `### 目标日期状态
+
+${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
+
+`;
+    } else {
+        markdownContent += `### 目标日期状态
+
+> - ${targetDate} 暂未发现号源
+
+`;
+    }
+    
+    if (availableSlots.length > 0) {
+        markdownContent += `### 可预约号源
+
+${availableSlots.map(slot => `> - ${slot}`).join('\n')}
+
+`;
+    }
+    
+    markdownContent += `### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
+    
+    return markdownContent;
+}
+
+/**
+ * 构造放号提醒的 Markdown 内容
+ * @param timeStr 放号时间
+ * @param minutes 剩余分钟数
+ * @param targetDate 目标日期
+ * @param targetSlotStatus 目标日期号源状态
+ * @returns Markdown 格式的通知内容
+ */
+function buildReleaseReminderMarkdown(
+    timeStr: string,
+    minutes: number,
+    targetDate: string,
+    targetSlotStatus: string[]
+): string {
+    let statusText = `> - ${targetDate} 暂未发现号源`;
+    if (targetSlotStatus.length > 0) {
+        statusText = targetSlotStatus.map(slot => `> - ${slot}`).join('\n');
+    }
+    
+    return `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！
+
+### 今日目标
+今天需要抢 **${targetDate}** 的号
+
+### 当前状态
+${statusText}
+
+### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
 }
 
 // 立即执行一次检查，然后启动定时器
@@ -318,41 +438,9 @@ async function scheduleRemindersAndFrequency() {
                             
                             if (response.ok) {
                                 const html = await response.text();
-                                const $ = cheerio.load(html);
                                 
-                                // 获取目标日期的号源状态
-                                const targetSlotStatus: string[] = [];
-                                let isHeadacheClinic = false;
-                                
-                                $('#time .weui-cell').each((index, element) => {
-                                    const cell = $(element);
-                                    
-                                    // 检查是否是头痛专病门诊标题
-                                    if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
-                                        isHeadacheClinic = true;
-                                        return; // 跳过标题行
-                                    }
-                                    
-                                    // 如果是头痛专病门诊且配置为跳过，则跳过
-                                    if (isHeadacheClinic && config.skipHeadacheClinic) {
-                                        return;
-                                    }
-                                    
-                                    const button = cell.find('.weui-btn');
-                                    
-                                    if (button.length > 0) {
-                                        const status = button.text().trim();
-                                        const date = cell.find('p:contains("日期")').text().trim().replace('日期：', '');
-                                        const period = cell.find('p:contains("时段")').text().trim().replace('时段：', '');
-                                        const day = cell.find('p:contains("星期")').text().trim();
-                                        const remaining = cell.find('p:contains("剩余/总数")').text().trim();
-                                        
-                                        // 只记录目标日期的状态
-                                        if (date === targetDate) {
-                                            targetSlotStatus.push(`${date} ${day} ${period} - ${status} - ${remaining}`);
-                                        }
-                                    }
-                                });
+                                // 使用公共函数获取目标日期的号源状态
+                                const targetSlotStatus = getTargetDateSlotStatus(html, targetDate);
                                 
                                 let statusText = `> - ${targetDate} 暂未发现号源`;
                                 if (targetSlotStatus.length > 0) {
