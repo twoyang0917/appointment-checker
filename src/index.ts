@@ -291,12 +291,7 @@ ${statusText}
 ### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
 }
 
-// 立即执行一次检查，然后启动定时器
-logger.info('程序启动，立即执行第一次检查...');
-checkAppointmentStatus();
-
-setInterval(checkAppointmentStatus, config.scanIntervals.regular * 1000);
-
+// --- 状态管理 ---
 let scanInterval = config.scanIntervals.regular * 1000; // 默认扫描间隔（使用新配置）
 let mainIntervalId: NodeJS.Timeout | null = null;
 const reminderTimerIds: NodeJS.Timeout[] = []; // 存储所有预告提醒的定时器ID
