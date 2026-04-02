@@ -143,40 +143,13 @@ async function checkAppointmentStatus() {
             if (now - lastNotificationTimestamp > notificationCooldown) {
                 const title = `🎉 发现可预约号源！`;
                 
-                let markdownContent = `
-## 挂号提醒
-
-发现可预约号源！
-
----
-
-### 今日目标
-今天需要抢 **${targetDate}** 的号
-
-`;
-                
-                if (targetSlotStatus.length > 0) {
-                    markdownContent += `### 目标日期状态
-
-${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
-
-`;
-                } else {
-                    markdownContent += `### 目标日期状态
-
-> - ${targetDate} 暂未发现号源
-
-`;
-                }
-                
-                markdownContent += `### 可预约号源
-
-${availableSlots.map(slot => `> - ${slot}`).join('\n')}
-
----
-
-### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})
-                `;
+                // 使用公共函数构造通知内容
+                const markdownContent = buildNotificationMarkdown(
+                    doctorName,
+                    targetDate,
+                    targetSlotStatus,
+                    availableSlots
+                );
 
                 logger.info('🎉 发现可预约号源！准备发送 Markdown 通知...');
                 await sendNotification(title, markdownContent);

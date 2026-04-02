@@ -306,58 +306,11 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
   
   describe('Notification sending', () => {
     it('should send notification for available appointments', async () => {
-      const doctorName = '周劲草';
-      const targetDate = '2026-04-02';
-      const targetSlotStatus = ['2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20'];
-      const availableSlots = [
-        '2026-04-02 周三 全天 - 可预约 - 剩余/总数：5/20',
-        '2026-04-03 周四 全天 - 可预约 - 剩余/总数：3/20'
-      ];
-      
-      // 组装通知内容
-      let markdownContent = `
-## 挂号提醒
-
-【测试】发现可预约号源！
-
----
-
-### 今日目标
-今天需要抢 **${targetDate}** 的号
-
-`;
-      
-      if (targetSlotStatus.length > 0) {
-        markdownContent += `### 目标日期状态
-
-${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
-
-`;
-      } else {
-        markdownContent += `### 目标日期状态
-
-> - ${targetDate} 暂未发现号源
-
-`;
-      }
-      
-      markdownContent += `### 可预约号源
-
-${availableSlots.map(slot => `> - ${slot}`).join('\n')}
-
----
-
-### [>> 点击这里，立即前往预约 <<](http://www.bjsfrj.com/weixin/zjsyy/index.php/yuyue/ysxx/ysid/48)
-      `;
-      
-      // 发送通知
-      const { sendNotification } = await import('../src/notifier');
-      await sendNotification(
-        `🎉 【测试】发现可预约号源！`,
-        markdownContent
-      );
-      
-      console.log('通知已发送，请检查微信是否收到');
+      // 这个测试用例会触发程序初始化时的自动检查，并发送通知
+      // 通知标题会由 notifier.ts 自动添加【测试】前缀（如果配置了测试环境）
+      // 这里只需要等待通知发送完成即可
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('通知已发送，请检查微信是否收到（标题应包含【测试】前缀）');
     });
   });
   

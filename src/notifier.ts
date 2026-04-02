@@ -11,6 +11,10 @@ export async function sendNotification(title: string, content: string) {
         return;
     }
 
+    // 在测试环境下，在标题开头添加【测试】前缀
+    const isTest = process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test';
+    const finalTitle = isTest ? `【测试】${title.replace('🎉 ', '')}` : title;
+
     // 在内容末尾添加当前时间（北京时间），以规避 PushPlus 的重复内容检测
     const beijingTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
     const currentTime = beijingTime.toLocaleString('zh-CN');
@@ -21,7 +25,7 @@ export async function sendNotification(title: string, content: string) {
     // PushPlus 使用 application/json 格式
     const body = JSON.stringify({
         token: config.pushPlus.token,
-        title: title,
+        title: finalTitle,
         content: contentWithTime,
         template: 'markdown',
         topic: config.pushPlus.topic // 群组编码，用于群组发送
