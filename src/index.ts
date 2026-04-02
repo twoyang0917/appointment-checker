@@ -322,12 +322,19 @@ async function scheduleRemindersAndFrequency() {
                                 
                                 // 获取目标日期的号源状态
                                 const targetSlotStatus: string[] = [];
+                                let isHeadacheClinic = false;
                                 
                                 $('#time .weui-cell').each((index, element) => {
                                     const cell = $(element);
                                     
-                                    // 跳过头痛专病门诊标题
+                                    // 检查是否是头痛专病门诊标题
                                     if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
+                                        isHeadacheClinic = true;
+                                        return; // 跳过标题行
+                                    }
+                                    
+                                    // 如果是头痛专病门诊且配置为跳过，则跳过
+                                    if (isHeadacheClinic && config.skipHeadacheClinic) {
                                         return;
                                     }
                                     

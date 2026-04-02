@@ -7,3 +7,6 @@ node_modules/
 dist/
 output/
 *.bun-build
+
+# 忽略 .trae 目录（包含本地配置和敏感信息）
+.trae/
