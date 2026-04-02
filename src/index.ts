@@ -52,6 +52,10 @@ async function checkAppointmentStatus() {
     logger.info(`[${new Date().toLocaleTimeString()}] 开始检查医生页面...`);
 
     try {
+        // 添加超时处理，避免网络请求卡住
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+        
         const response = await fetch(config.doctorPageUrl, {
             headers: {
                 'User-Agent': config.userAgent,
@@ -60,8 +64,11 @@ async function checkAppointmentStatus() {
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Accept-Encoding': 'gzip, deflate',
                 'Upgrade-Insecure-Requests': '1',
-            }
+            },
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
             const errorMessage = `请求预约页面失败，状态码: ${response.status}。很可能是 Cookie 已失效，请及时更新。`;
@@ -183,7 +190,11 @@ ${availableSlots.map(slot => `> - ${slot}`).join('\n')}
 
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        await handleError("程序运行异常", message);
+        if (error instanceof Error && error.name === 'AbortError') {
+            await handleError("请求超时", "网络请求超时，请检查网络连接或服务器状态。");
+        } else {
+            await handleError("程序运行异常", message);
+        }
     }
 }
 
@@ -284,12 +295,72 @@ async function scheduleRemindersAndFrequency() {
             // 战斗模式结束时间（放号后 duration 秒）
             const combatModeEndTime = targetTime.getTime() + config.combatMode.duration * 1000;
 
+            // 获取今天应该抢的号的日期
+            const targetDate = getTargetDate();
+            
             config.reminderMinutesBeforeRelease.forEach(minutes => {
                 const reminderTime = targetTime.getTime() - minutes * 60 * 1000;
                 if (reminderTime > now.getTime()) {
                     const timeout = reminderTime - now.getTime();
-                    const timerId = setTimeout(() => {
-                        sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`);
+                    const timerId = setTimeout(async () => {
+                        // 发送放号提醒时，先获取当前号源状态
+                        try {
+                            const response = await fetch(config.doctorPageUrl, {
+                                headers: {
+                                    'User-Agent': config.userAgent,
+                                    'Cookie': config.cookie,
+                                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/wxpic,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                                    'Accept-Language': 'en-US,en;q=0.9',
+                                    'Accept-Encoding': 'gzip, deflate',
+                                    'Upgrade-Insecure-Requests': '1',
+                                }
+                            });
+                            
+                            if (response.ok) {
+                                const html = await response.text();
+                                const $ = cheerio.load(html);
+                                
+                                // 获取目标日期的号源状态
+                                const targetSlotStatus: string[] = [];
+                                
+                                $('#time .weui-cell').each((index, element) => {
+                                    const cell = $(element);
+                                    
+                                    // 跳过头痛专病门诊标题
+                                    if (cell.find('h4').length > 0 && cell.find('h4').text().includes('头痛专病门诊')) {
+                                        return;
+                                    }
+                                    
+                                    const button = cell.find('.weui-btn');
+                                    
+                                    if (button.length > 0) {
+                                        const status = button.text().trim();
+                                        const date = cell.find('p:contains("日期")').text().trim().replace('日期：', '');
+                                        const period = cell.find('p:contains("时段")').text().trim().replace('时段：', '');
+                                        const day = cell.find('p:contains("星期")').text().trim();
+                                        const remaining = cell.find('p:contains("剩余/总数")').text().trim();
+                                        
+                                        // 只记录目标日期的状态
+                                        if (date === targetDate) {
+                                            targetSlotStatus.push(`${date} ${day} ${period} - ${status} - ${remaining}`);
+                                        }
+                                    }
+                                });
+                                
+                                let statusText = `> - ${targetDate} 暂未发现号源`;
+                                if (targetSlotStatus.length > 0) {
+                                    statusText = targetSlotStatus.map(slot => `> - ${slot}`).join('\n');
+                                }
+                                
+                                const message = `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### 今日目标\n今天需要抢 **${targetDate}** 的号\n\n### 当前状态\n${statusText}\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
+                                await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
+                            } else {
+                                await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### 今日目标\n今天需要抢 **${targetDate}** 的号\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`);
+                            }
+                        } catch (error) {
+                            // 如果获取状态失败，发送基本提醒
+                            await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### 今日目标\n今天需要抢 **${targetDate}** 的号\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`);
+                        }
                     }, timeout);
                     reminderTimerIds.push(timerId);
                     logger.info(`已设置：在 ${new Date(reminderTime).toLocaleString()} 发送放号前${minutes}分钟提醒`);
