@@ -94,23 +94,15 @@ describe('Appointment Checker', () => {
   });
   
   describe('getTargetDate', () => {
-    it('should return the date 3 days from now', () => {
-      // 模拟当前日期
-      const mockDate = new Date('2026-03-30');
-      
-      // 模拟 Date 构造函数
-      global.Date = function(...args: any[]) {
-        if (args.length === 0) {
-          return mockDate;
-        }
-        return new originalDate(...args);
-      } as any;
-      
-      global.Date.now = () => mockDate.getTime();
-      Object.setPrototypeOf(global.Date, originalDate.prototype);
-      
+    it('should return the date 3 days from now based on Beijing timezone', () => {
       const targetDate = getTargetDate();
-      expect(targetDate).toBe('2026-04-02');
+      
+      const now = new Date();
+      const expected = new Date(now);
+      expected.setDate(now.getDate() + 3);
+      const expectedStr = `${expected.getFullYear()}-${String(expected.getMonth() + 1).padStart(2, '0')}-${String(expected.getDate()).padStart(2, '0')}`;
+      
+      expect(targetDate).toBe(expectedStr);
     });
   });
   

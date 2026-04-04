@@ -2,6 +2,12 @@ import * as cheerio from 'cheerio';
 import { config, logger } from './config';
 import { sendNotification } from './notifier';
 
+const APPOINTMENT_LINK_TEXT = "点此立即前往预约";
+
+function getAppointmentLink(): string {
+    return `### [>> ${APPOINTMENT_LINK_TEXT} <<](${config.doctorPageUrl})`;
+}
+
 // --- 状态管理 ---
 // 用于故障通知的冷却，防止在持续故障时轰炸用户。单位: 毫秒
 let lastErrorNotificationTimestamp = 0;
@@ -29,12 +35,22 @@ async function handleError(title: string, message: string) {
 }
 
 /**
+ * 获取当前北京时间的"今天"日期
+ * @returns 北京时间下的 Date 对象
+ */
+function getBeijingDate(): Date {
+    const now = new Date();
+    const utcTime = now.getTime();
+    const beijingOffset = 8 * 60 * 60 * 1000; // UTC+8 偏移量
+    return new Date(utcTime + beijingOffset);
+}
+
+/**
  * 计算今天应该抢哪天的号（就诊日的前三天）
  * @returns 目标日期字符串 (YYYY-MM-DD)
  */
 export function getTargetDate(): string {
-    const today = new Date();
-    // 就诊日的前三天，所以要加3天
+    const today = getBeijingDate();
     const targetDate = new Date(today);
     targetDate.setDate(today.getDate() + 3);
     
@@ -229,66 +245,51 @@ function buildNotificationMarkdown(
     targetSlotStatus: string[],
     availableSlots: string[]
 ): string {
-    let markdownContent = `### 今日目标
-今天需要抢 **${targetDate}** 的号
+    let markdownContent = `🎯 **目标日期：${targetDate}**（就诊日前3天）
 
 `;
     
     if (targetSlotStatus.length > 0) {
-        markdownContent += `### 目标日期状态
-
-${targetSlotStatus.map(slot => `> - ${slot}`).join('\n')}
+        markdownContent += `📋 目标日期状态：
+${targetSlotStatus.map(slot => `> ${slot}`).join('\n')}
 
 `;
     } else {
-        markdownContent += `### 目标日期状态
-
-> - ${targetDate} 暂未发现号源
+        markdownContent += `📋 目标日期状态：
+> ${targetDate} 暂未放号
 
 `;
     }
     
     if (availableSlots.length > 0) {
-        markdownContent += `### 可预约号源
-
-${availableSlots.map(slot => `> - ${slot}`).join('\n')}
+        markdownContent += `✅ **可预约号源**（${availableSlots.length}个）：
+${availableSlots.map(slot => `> ${slot}`).join('\n')}
 
 `;
     }
     
-    markdownContent += `### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
+    markdownContent += getAppointmentLink();
     
     return markdownContent;
 }
 
 /**
- * 构造放号提醒的 Markdown 内容
- * @param timeStr 放号时间
- * @param minutes 剩余分钟数
- * @param targetDate 目标日期
- * @param targetSlotStatus 目标日期号源状态
- * @returns Markdown 格式的通知内容
+ * 构造放号提醒消息
  */
-function buildReleaseReminderMarkdown(
-    timeStr: string,
-    minutes: number,
-    targetDate: string,
-    targetSlotStatus: string[]
-): string {
-    let statusText = `> - ${targetDate} 暂未发现号源`;
-    if (targetSlotStatus.length > 0) {
-        statusText = targetSlotStatus.map(slot => `> - ${slot}`).join('\n');
-    }
+function buildReleaseReminderMessage(timeStr: string, minutes: number, targetDate: string, targetSlotStatus?: string[]): string {
+    const hasStatus = targetSlotStatus && targetSlotStatus.length > 0;
+    const statusText = hasStatus 
+        ? targetSlotStatus.map(slot => `> ${slot}`).join('\n')
+        : `> ${targetDate} 暂未放号`;
     
-    return `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！
+    const statusSection = hasStatus 
+        ? `\n📋 当前状态：\n${statusText}\n`
+        : `（就诊日前3天）\n`;
+    
+    return `⏰ 距离 ${timeStr} 放号还有 **${minutes} 分钟**，请准备！
 
-### 今日目标
-今天需要抢 **${targetDate}** 的号
-
-### 当前状态
-${statusText}
-
-### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
+🎯 目标日期：**${targetDate}**${statusSection}
+${getAppointmentLink()}`;
 }
 
 // --- 状态管理 ---
@@ -357,22 +358,16 @@ async function scheduleRemindersAndFrequency() {
         }
 
         // 使用UTC+8时区（北京时间）
-        const now = new Date();
-        const utcOffset = 8; // UTC+8小时
+        const now = getBeijingDate();
         
         uniqueTimes.forEach(timeStr => {
             const [hour, minute] = timeStr.split(':').map(Number);
             
-            // 创建UTC时间，然后调整为UTC+8
-            const targetUtcTime = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hour - utcOffset, minute, 0, 0));
-            
-            // 转换为本地时间进行比较
-            const targetTime = new Date(targetUtcTime.getTime());
+            // 基于北京时间构建目标时间
+            const targetTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0, 0);
 
             if (targetTime < now) {
-                // 如果目标时间已过，设置为明天的同一时间
-                const tomorrowUtc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + 1, hour - utcOffset, minute, 0, 0));
-                targetTime.setTime(tomorrowUtc.getTime());
+                targetTime.setDate(targetTime.getDate() + 1);
             }
 
             // 战斗模式开始时间（与第一个提醒时间相同）
@@ -410,19 +405,16 @@ async function scheduleRemindersAndFrequency() {
                                 // 使用公共函数获取目标日期的号源状态
                                 const targetSlotStatus = getTargetDateSlotStatus(html, targetDate);
                                 
-                                let statusText = `> - ${targetDate} 暂未发现号源`;
-                                if (targetSlotStatus.length > 0) {
-                                    statusText = targetSlotStatus.map(slot => `> - ${slot}`).join('\n');
-                                }
-                                
-                                const message = `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### 今日目标\n今天需要抢 **${targetDate}** 的号\n\n### 当前状态\n${statusText}\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`;
+                                const message = buildReleaseReminderMessage(timeStr, minutes, targetDate, targetSlotStatus);
                                 await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
                             } else {
-                                await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### 今日目标\n今天需要抢 **${targetDate}** 的号\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`);
+                                const message = buildReleaseReminderMessage(timeStr, minutes, targetDate);
+                                await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
                             }
                         } catch (error) {
                             // 如果获取状态失败，发送基本提醒
-                            await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, `距离 ${timeStr} 放号还有 ${minutes} 分钟，请做好准备！\n\n### 今日目标\n今天需要抢 **${targetDate}** 的号\n\n### [>> 点击这里，立即前往预约 <<](${config.doctorPageUrl})`);
+                            const message = buildReleaseReminderMessage(timeStr, minutes, targetDate);
+                            await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
                         }
                     }, timeout);
                     reminderTimerIds.push(timerId);
