@@ -154,25 +154,28 @@ async function checkAppointmentStatus() {
         const isCombatMode = scanInterval === config.scanIntervals.combat * 1000;
         const notificationCooldown = isCombatMode ? config.notificationCooldown.combat * 1000 : config.notificationCooldown.regular * 1000;
 
-        // 发送提醒：只在有可预约号源且不在冷却期内时发送
-        if (availableSlots.length > 0) {
-            if (now - lastNotificationTimestamp > notificationCooldown) {
-                const title = `🎉 发现可预约号源！`;
-                
-                // 使用公共函数构造通知内容
-                const markdownContent = buildNotificationMarkdown(
-                    doctorName,
-                    targetDate,
-                    targetSlotStatus,
-                    availableSlots
-                );
+        // 测试模式下总是发送通知（用于测试发消息能力）
+        const isTestMode = process.env.BUN_ENV === 'test' || process.env.NODE_ENV === 'test';
+        const isCooldownPassed = now - lastNotificationTimestamp > notificationCooldown;
+        const shouldNotify = isTestMode || (availableSlots.length > 0 && isCooldownPassed);
 
-                logger.info('🎉 发现可预约号源！准备发送 Markdown 通知...');
-                await sendNotification(title, markdownContent);
-                lastNotificationTimestamp = now;
+        if (shouldNotify) {
+            let title: string;
+            let markdownContent: string;
+
+            if (isTestMode) {
+                title = `🧪 测试模式：${availableSlots.length > 0 ? '发现可预约号源' : '暂未发现号源'}`;
+                markdownContent = buildNotificationMarkdown(doctorName, targetDate, targetSlotStatus, availableSlots);
             } else {
-                logger.info('发现可预约号源，但在冷却期内，跳过发送。');
+                title = `🎉 发现可预约号源！`;
+                markdownContent = buildNotificationMarkdown(doctorName, targetDate, targetSlotStatus, availableSlots);
+                lastNotificationTimestamp = now;
             }
+
+            logger.info(`${isTestMode ? '🧪 测试模式' : '🎉 发现可预约号源'}！准备发送 Markdown 通知...`);
+            await sendNotification(title, markdownContent);
+        } else if (availableSlots.length > 0) {
+            logger.info('发现可预约号源，但在冷却期内，跳过发送。');
         } else {
             logger.info('暂无可用号源。');
         }

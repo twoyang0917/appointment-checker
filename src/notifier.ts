@@ -11,9 +11,9 @@ export async function sendNotification(title: string, content: string) {
         return;
     }
 
-    // 在测试环境下，在标题开头添加【测试】前缀
-    const isTest = process.env.NODE_ENV === 'test' || process.env.BUN_ENV === 'test';
-    const finalTitle = isTest ? `【测试】${title.replace('🎉 ', '')}` : title;
+    // 测试模式下使用 🧪 emoji 标识，不再加【测试】前缀
+    const isTest = process.env.BUN_ENV === 'test' || process.env.NODE_ENV === 'test';
+    const finalTitle = title;
 
     // 在内容末尾添加当前时间（北京时间），以规避 PushPlus 的重复内容检测
     const beijingTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
