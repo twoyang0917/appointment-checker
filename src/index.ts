@@ -254,19 +254,22 @@ function buildNotificationMarkdown(
     
     if (targetSlotStatus.length > 0) {
         markdownContent += `📋 目标日期状态：
-${targetSlotStatus.map(slot => `> ${slot}`).join('\n')}
+
+${targetSlotStatus.map(slot => `* ${slot}`).join('\n')}
 
 `;
     } else {
         markdownContent += `📋 目标日期状态：
-> ${targetDate} 暂未放号
+
+* ${targetDate} 暂未放号
 
 `;
     }
     
     if (availableSlots.length > 0) {
         markdownContent += `✅ **可预约号源**（${availableSlots.length}个）：
-${availableSlots.map(slot => `> ${slot}`).join('\n')}
+
+${availableSlots.map(slot => `* ${slot}`).join('\n')}
 
 `;
     }
@@ -282,8 +285,8 @@ ${availableSlots.map(slot => `> ${slot}`).join('\n')}
 function buildReleaseReminderMessage(timeStr: string, minutes: number, targetDate: string, targetSlotStatus?: string[]): string {
     const hasStatus = targetSlotStatus && targetSlotStatus.length > 0;
     const statusText = hasStatus 
-        ? targetSlotStatus.map(slot => `> ${slot}`).join('\n')
-        : `> ${targetDate} 暂未放号`;
+        ? targetSlotStatus.map(slot => `* ${slot}`).join('\n')
+        : `* ${targetDate} 暂未放号`;
     
     const statusSection = hasStatus 
         ? `\n📋 当前状态：\n${statusText}\n`
