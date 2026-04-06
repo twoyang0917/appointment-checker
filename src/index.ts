@@ -40,9 +40,12 @@ async function handleError(title: string, message: string) {
  */
 function getBeijingDate(): Date {
     const now = new Date();
-    const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2' });
-    const [year, month, day] = formatter.format(now).split('/').map(Number);
-    return new Date(year, month - 1, day);
+    const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric', day: 'numeric' });
+    const parts = formatter.formatToParts(now);
+    const year = parts.find(p => p.type === 'year')?.value || '';
+    const month = parts.find(p => p.type === 'month')?.value || '';
+    const day = parts.find(p => p.type === 'day')?.value || '';
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
 }
 
 /**
@@ -392,7 +395,7 @@ async function scheduleRemindersAndFrequency() {
                 if (reminderTime > now.getTime()) {
                     const timeout = reminderTime - now.getTime();
                     const timerId = setTimeout(async () => {
-                        // 发送放号提醒时，先获取当前号源状态
+                        // 发送放号提醒时，先获取当前号源状态，检查目标日期是否有号源
                         try {
                             const response = await fetch(config.doctorPageUrl, {
                                 headers: {
@@ -411,16 +414,26 @@ async function scheduleRemindersAndFrequency() {
                                 // 使用公共函数获取目标日期的号源状态
                                 const targetSlotStatus = getTargetDateSlotStatus(html, targetDate);
                                 
-                                const message = buildReleaseReminderMessage(timeStr, minutes, targetDate, targetSlotStatus);
-                                await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
+                                // 检查目标日期是否有可预约的号源
+                                const hasAvailableSlots = targetSlotStatus.some(slot => {
+                                    const status = slot.split(' - ')[2] || '';
+                                    return status !== '未开始' && status !== '已约满' && status !== '停止预约';
+                                });
+                                
+                                if (hasAvailableSlots) {
+                                    const message = buildReleaseReminderMessage(timeStr, minutes, targetDate, targetSlotStatus);
+                                    await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
+                                } else {
+                                    logger.info(`放号提醒：目标日期 ${targetDate} 无可预约号源，跳过提醒`);
+                                }
                             } else {
-                                const message = buildReleaseReminderMessage(timeStr, minutes, targetDate);
-                                await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
+                                // 请求失败时不发送提醒
+                                logger.error(`放号提醒：获取医生页面失败，状态码 ${response.status}，跳过提醒`);
                             }
                         } catch (error) {
-                            // 如果获取状态失败，发送基本提醒
-                            const message = buildReleaseReminderMessage(timeStr, minutes, targetDate);
-                            await sendNotification(`⏰ 放号提醒 - 还有${minutes}分钟`, message);
+                            // 获取状态失败时不发送提醒
+                            const errMsg = error instanceof Error ? error.message : String(error);
+                            logger.error(`放号提醒：获取医生页面异常 ${errMsg}，跳过提醒`);
                         }
                     }, timeout);
                     reminderTimerIds.push(timerId);
