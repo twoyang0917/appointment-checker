@@ -40,9 +40,9 @@ async function handleError(title: string, message: string) {
  */
 function getBeijingDate(): Date {
     const now = new Date();
-    const utcTime = now.getTime();
-    const beijingOffset = 8 * 60 * 60 * 1000; // UTC+8 偏移量
-    return new Date(utcTime + beijingOffset);
+    const formatter = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2' });
+    const [year, month, day] = formatter.format(now).split('/').map(Number);
+    return new Date(year, month - 1, day);
 }
 
 /**
