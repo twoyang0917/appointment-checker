@@ -332,7 +332,17 @@ async function scheduleRemindersAndFrequency() {
     // ------------------------------------------
 
     try {
-        const response = await fetch(config.rulesPageUrl, { headers: { 'User-Agent': config.userAgent, 'Cookie': config.cookie } });
+        // 添加超时处理，避免网络请求卡住
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+        
+        const response = await fetch(config.rulesPageUrl, {
+            headers: { 'User-Agent': config.userAgent, 'Cookie': config.cookie },
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
             await handleError("规则页请求失败", `无法获取挂号规则，状态码: ${response.status}`);
             return;
@@ -397,16 +407,23 @@ async function scheduleRemindersAndFrequency() {
                     const timerId = setTimeout(async () => {
                         // 发送放号提醒时，先获取当前号源状态，检查目标日期是否有号源
                         try {
-                            const response = await fetch(config.doctorPageUrl, {
-                                headers: {
-                                    'User-Agent': config.userAgent,
-                                    'Cookie': config.cookie,
-                                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/wxpic,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                                    'Accept-Language': 'en-US,en;q=0.9',
-                                    'Accept-Encoding': 'gzip, deflate',
-                                    'Upgrade-Insecure-Requests': '1',
-                                }
-                            });
+                                // 添加超时处理，避免网络请求卡住
+                                const controller = new AbortController();
+                                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+                                
+                                const response = await fetch(config.doctorPageUrl, {
+                                    headers: {
+                                        'User-Agent': config.userAgent,
+                                        'Cookie': config.cookie,
+                                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/wxpic,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                                        'Accept-Language': 'en-US,en;q=0.9',
+                                        'Accept-Encoding': 'gzip, deflate',
+                                        'Upgrade-Insecure-Requests': '1',
+                                    },
+                                    signal: controller.signal
+                                });
+                                
+                                clearTimeout(timeoutId);
                             
                             if (response.ok) {
                                 const html = await response.text();

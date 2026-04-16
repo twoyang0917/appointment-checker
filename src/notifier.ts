@@ -32,13 +32,20 @@ export async function sendNotification(title: string, content: string) {
     });
 
     try {
+        // 添加超时处理，避免网络请求卡住
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+        
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: body,
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
         const result = await response.json();
 
@@ -48,6 +55,10 @@ export async function sendNotification(title: string, content: string) {
             logger.error(`发送 PushPlus 通知失败: ${JSON.stringify(result)}`);
         }
     } catch (error) {
-        logger.error(`发送 PushPlus 通知时发生严重错误: ${error}`);
+        if (error instanceof Error && error.name === 'AbortError') {
+            logger.error('发送 PushPlus 通知时发生超时错误: 网络请求超时，请检查网络连接或服务器状态。');
+        } else {
+            logger.error(`发送 PushPlus 通知时发生严重错误: ${error}`);
+        }
     }
 }
